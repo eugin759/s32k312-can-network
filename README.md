@@ -12,10 +12,10 @@ La aplicación reserva tres Message Buffers:
 
 La selección del nodo, el transceiver, los filtros y los modos de prueba está centralizada en [`src/can_app_config.h`](src/can_app_config.h).
 
-Estado de los defines en este workspace al escribir este documento:
+Estado actual de los defines en este workspace:
 
-- `NODE_ID = 2` (`DASHBOARD`).
-- `CAN_HW_INTERNAL` activo.
+- `NODE_ID = 3` (`POWERTRAIN`).
+- `CAN_HW_EXTERNAL` activo.
 - `CAN_DEBUG_MODE` activo: aceptación abierta para depuración.
 - `CAN_USE_RUNTIME_BITTIMING_PATCH = 1`: se mantiene el ajuste manual como respaldo.
 - `ARBITRATION_TEST` desactivado; `INVALID_ID_TEST` activo para habilitar SW2.
@@ -35,13 +35,15 @@ recepción por 5 segundos: Nodo 1 verde, Nodo 2 azul, Nodo 3 rojo y Nodo 4 blanc
 
 Conectar CANH con CANH y CANL con CANL, mantener una referencia GND común y colocar terminación únicamente en los dos extremos físicos del bus. Revisar si las placas ya incorporan terminación antes de añadir resistores.
 
+Para `CAN_HW_EXTERNAL`, conectar el MCU al TJA1051 así: **PTA11 / CAN1_TX -> TXD** y **PTA12 / CAN1_RX <- RXD**. Conectar GND común, alimentar VCC del TJA1051 con 5 V, y mantener su pin S en GND para modo normal. Conectar CANH/CANL del transceiver al bus. No aplicar 5 V a PTA11 ni PTA12; la alimentación de 5 V del transceiver no sustituye la alimentación necesaria para el MCU de la tarjeta.
+
 El pinmux generado configura ambos pares: CAN0/PTA6-PTA7 y CAN1/PTA11-PTA12.
 También configura SW3/PTB26 y SW2/PTB19 como entradas activas en alto, y los
 canales RGB PTA29 (rojo), PTA30 (verde) y PTA31 (azul) como salidas activas en
 bajo. [`src/can_hw.c`](src/can_hw.c) inicializa el array de pines; el build activa
 únicamente la instancia indicada por `CAN_HW_INTERNAL` o `CAN_HW_EXTERNAL`.
 
-El `.mex` actual también tiene una configuración FlexCAN generada para FLEXCAN0. El driver de aplicación pasa el índice seleccionado en runtime y reutiliza `FlexCAN_Config0`; revisar la configuración generada si se modifica la topología de instancias.
+El `.mex` configura clocks de 24 MHz y pinmux para FLEXCAN0 y FLEXCAN1. El PBcfg genera `FlexCAN_Config0` y `FlexCAN_State0`; el RTD recibe la instancia seleccionada por separado y registra el state pointer para esa instancia. Este proyecto usa una sola instancia por firmware: FLEXCAN0 para interno o FLEXCAN1 para externo.
 
 ## 3. Configuración central
 
@@ -58,7 +60,7 @@ Editar [`src/can_app_config.h`](src/can_app_config.h) al preparar cada placa:
 - `CAN_BUTTON_ACTIVE_LEVEL`: ambos pulsadores son activos en alto.
 - `CAN_BUTTON_DEBOUNCE_MS`: tiempo de estabilidad para aceptar una pulsación; actualmente 50 ms.
 - `CAN_RX_LED_ON_TIME_MS`: tiempo de indicación por recepción; actualmente 5000 ms.
-- `CAN_RX_FILTER_MASK`: máscara lógica de comparación: `0x000` en debug (no comparar el ID) o `0x7FF` en evaluación (comparar los 11 bits). `can_hw.c` invierte esos bits al escribir RXIMR porque el hardware usa `1` para indicar "don't care".
+- `CAN_RX_FILTER_MASK`: máscara de comparación: `0x000` en debug (no comparar el ID) o `0x7FF` en evaluación (comparar los 11 bits). RXIMR usa la misma polaridad: `1` compara y `0` ignora; `can_hw.c` escribe los 11 bits directamente en el campo del ID estándar.
 - `CAN_USE_RUNTIME_BITTIMING_PATCH`: define numérico; `1` mantiene la sobreescritura manual de timing y `0` usa los valores de `FlexCAN_Config0` generados por RTD. El valor actual es `1`.
 
 `ARBITRATION_TEST` e `INVALID_ID_TEST` no pueden habilitarse juntos: el encabezado produce un error de compilación si ambos están definidos.
@@ -70,7 +72,7 @@ Editar [`src/can_app_config.h`](src/can_app_config.h) al preparar cada placa:
 | 1 | `MASTER` | `0x100` | `0x200` | `0x300` |
 | 2 | `DASHBOARD` | `0x200` | `0x100` | `0x400` |
 | 3 | `POWERTRAIN` | `0x300` | `0x100` | `0x200` |
-| 4 | `BODY_CTRL` | `0x400` | `0x200` | `0x300` |
+| 4 | `BODY_CTRL` | `0x400` | `0x100` | `0x300` |
 
 Compilar una variante por placa con el `NODE_ID` correspondiente. Los IDs mostrados caben en el formato estándar de 11 bits.
 
@@ -141,12 +143,12 @@ La aplicación fuerza `fd_enable = FALSE`, `bitRateSwitch = FALSE` y `FLEXCAN_NO
 
 ## 8. Filtros
 
-La aplicación programa máscaras de hardware individuales. `CAN_RX_FILTER_MASK` expresa qué bits comparar; RXIMR tiene la polaridad inversa:
+La aplicación programa máscaras de hardware individuales. RXIMR usa `1` para comparar el bit correspondiente del ID y `0` para ignorarlo:
 
-- **Modo debug (`CAN_DEBUG_MODE` definido):** `CAN_RX_FILTER_MASK = 0x000`; RXIMR recibe `0x1FFC0000` en los bits de ID para aceptar todos los IDs estándar. Solo MB1 se arma como monitor.
-- **Modo evaluación (`CAN_DEBUG_MODE` comentado):** `CAN_RX_FILTER_MASK = 0x7FF`; RXIMR recibe cero en los bits de ID, por lo que compara el ID exacto configurado en cada MB. Se arman MB1 y MB2.
+- **Modo debug (`CAN_DEBUG_MODE` definido):** `CAN_RX_FILTER_MASK = 0x000`; los bits de ID de RXIMR quedan en cero, así que no compara el ID y MB1 acepta cualquier ID estándar de datos. Solo MB1 se arma como monitor.
+- **Modo evaluación (`CAN_DEBUG_MODE` comentado):** `CAN_RX_FILTER_MASK = 0x7FF`; RXIMR recibe `0x1FFC0000` en los bits de ID y compara los 11 bits del ID configurado en cada MB. Se arman MB1 y MB2.
 
-Para la entrega, usar el modo estricto: comentar `CAN_DEBUG_MODE`, seleccionar el `NODE_ID` correcto y dejar desactivadas las pruebas temporales. La máscara lógica es `0x7FF`; la representación correspondiente en RXIMR es cero en los bits de ID.
+Para la entrega, usar el modo estricto: comentar `CAN_DEBUG_MODE`, seleccionar el `NODE_ID` correcto y dejar desactivadas las pruebas temporales. La máscara lógica es `0x7FF`; su representación en RXIMR tiene los 11 bits del ID activados.
 
 La máscara de aceptación no controla el ACK del protocolo. Un nodo puede reconocer eléctricamente una trama y emitir ACK aunque el filtro de aceptación no la entregue a MB1/MB2.
 
@@ -221,16 +223,17 @@ La máscara de aceptación no controla el ACK del protocolo. Un nodo puede recon
 - `CAN.mex`: clocks, periféricos y pinmux mediante S32 Config Tools; regenerar los archivos asociados después de editarlo.
 - `README.md`: mantener esta guía sincronizada con cualquier cambio validado de arquitectura o procedimiento de laboratorio.
 
-## Checklist antes de flashear
+## Checklist antes de flashear — Nodo 3 externo
 
-- **Archivos modificados para Nodo 2:** `src/can_app_config.h`, `CAN.mex`, `board/Siul2_Port_Ip_Cfg.c`, `board/Siul2_Port_Ip_Cfg.h`, `src/can_hw.c`, `src/can_hw.h`, `src/can_app.c`, `src/can_app.h` y este `README.md`.
-- **Defines:** `NODE_ID = 2`; `CAN_HW_INTERNAL` y `CAN_DEBUG_MODE` definidos; `CAN_HW_EXTERNAL` y `ARBITRATION_TEST` comentados; `INVALID_ID_TEST` definido; `CAN_USE_RUNTIME_BITTIMING_PATCH = 1U`.
-- **IDs resultantes:** `NODE_TX_ID = 0x200`, `NODE_RX_ID_1 = 0x100`, `NODE_RX_ID_2 = 0x400`; SW2 transmite `TEST_INVALID_ID = 0x555`.
-- **Instancia:** FLEXCAN0 (`CAN_FLEXCAN_INSTANCE = 0U`).
-- **Pines:** CAN0_RX = PTA6 y CAN0_TX = PTA7; transceiver integrado de MINI-EVB y terminales CANH/CANL.
+- **Archivos modificados:** `src/can_app_config.h`, `src/can_hw.c` y este `README.md`. No se modifican los archivos generados ni la arquitectura de los otros nodos.
+- **Defines:** `NODE_ID = 3`; `CAN_HW_EXTERNAL` y `CAN_DEBUG_MODE` definidos; `CAN_HW_INTERNAL` y `ARBITRATION_TEST` comentados; `INVALID_ID_TEST` definido; `CAN_USE_RUNTIME_BITTIMING_PATCH = 1U` sin cambios.
+- **IDs resultantes:** `NODE_TX_ID = 0x300`, `NODE_RX_ID_1 = 0x100`, `NODE_RX_ID_2 = 0x200`; SW2 transmite `TEST_INVALID_ID = 0x555`.
+- **Instancia:** FLEXCAN1 (`CAN_FLEXCAN_INSTANCE = 1U`).
+- **Pines al TJA1051:** PTA11 / CAN1_TX -> TXD; PTA12 / CAN1_RX <- RXD; GND común; VCC del TJA1051 a 5 V; S a GND.
+- **Bus:** CANH del TJA1051 a CANH y CANL a CANL; usar terminación solo en los dos extremos físicos del bus.
 - **Message Buffers:** MB0 TX, MB1 RX_ID_1, MB2 RX_ID_2.
-- **Pulsadores:** SW3/PTB26 transmite el ID normal; SW2/PTB19 transmite `0x555` con `INVALID_ID_TEST`. Ambos activos en alto con debounce de 50 ms.
-- **Indicador de recepción:** Nodo 2 azul, activo en bajo, encendido 5 segundos tras cada trama aceptada.
-- **Bitrate esperado:** 500 kbit/s nominales con clock FlexCAN de 24 MHz. El parche runtime permanece habilitado.
+- **Pulsadores:** SW3/PTB26 transmite el ID normal `0x300`; SW2/PTB19 transmite `0x555` con `INVALID_ID_TEST`. Ambos activos en alto con debounce de 50 ms.
+- **Indicador de recepción:** Nodo 3 rojo, activo en bajo, encendido 5 segundos tras cada trama aceptada.
+- **Bitrate esperado:** 500 kbit/s nominales con clock FLEXCAN1 de 24 MHz. El parche runtime permanece habilitado.
 - **Frecuencia de transmisión esperada:** una solicitud por pulsación; `ARBITRATION_TEST` activa el modo periódico de 10 ms.
 - **Filtros:** máscara abierta `0x000` para esta prueba física, porque `CAN_DEBUG_MODE` está activo.

@@ -10,11 +10,11 @@
 /* =========================================================================
  * 1. PANEL DE CONTROL DEL NODO (Modificar unicamente esta seccion por placa)
  * ========================================================================= */
-#define NODE_ID             1      /**< Node role: 1, 2, 3, or 4 */
+#define NODE_ID             4      /**< Node role: 1, 2, 3, or 4 */
 
 /* Seleccion de hardware fisico (Descomentar SOLO UNO en S32K312) */
-// #define CAN_HW_EXTERNAL          /**< External TJA1051 (5V USB-powered board) */
-#define CAN_HW_INTERNAL             /**< Onboard CAN transceiver (MINI-EVB) */
+#define CAN_HW_EXTERNAL             /**< External TJA1051 (5V USB-powered board) */
+// #define CAN_HW_INTERNAL          /**< Onboard CAN transceiver (MINI-EVB) */
 
 /* Modos de operacion y prueba */
 #define CAN_DEBUG_MODE              /**< Comment out for strict 0x7FF hardware filtering */
@@ -80,7 +80,7 @@
 #elif (NODE_ID == 4)
     #define NODE_NAME       "BODY_CTRL"
     #define NODE_TX_ID      0x400U
-    #define NODE_RX_ID_1    0x200U
+    #define NODE_RX_ID_1    0x100U
     #define NODE_RX_ID_2    0x300U
 #else
     #error "Invalid NODE_ID defined in can_app_config.h (must be 1..4)"

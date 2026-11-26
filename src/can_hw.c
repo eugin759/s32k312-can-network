@@ -69,11 +69,8 @@ static void CanHw_FlexcanErrorCallback(uint8 instance,
 
 static uint32 CanHw_GetRxHardwareMask(void)
 {
-    /*
-     * CAN_RX_FILTER_MASK is a logical compare mask (1 = compare).
-     * FlexCAN RXIMR uses the opposite polarity (1 = don't care).
-     */
-    return ((~(uint32)CAN_RX_FILTER_MASK & 0x7FFU) << FLEXCAN_IP_ID_STD_SHIFT);
+    /* RXIMR uses 1 to compare an ID bit and 0 to ignore it. */
+    return (((uint32)CAN_RX_FILTER_MASK & 0x7FFU) << FLEXCAN_IP_ID_STD_SHIFT);
 }
 
 CanHw_StatusType CanHw_Init(void)
@@ -88,7 +85,7 @@ CanHw_StatusType CanHw_Init(void)
         return CAN_HW_STATUS_CLOCK_ERROR;
     }
 
-    /* Regenerate this table for CAN0 if the board's internal pinmux requires it. */
+    /* This table configures both CAN pin pairs and the board's button/LED GPIOs. */
     if (Siul2_Port_Ip_Init(
             NUM_OF_CONFIGURED_PINS_PortContainer_0_BOARD_InitPeripherals,
             g_pin_mux_InitConfigArr_PortContainer_0_BOARD_InitPeripherals) != SIUL2_PORT_SUCCESS)
