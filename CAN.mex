@@ -51,6 +51,31 @@
                   <pin peripheral="CAN0" signal="can0_tx" pin_num="100" pin_signal="PTA7"/>
                   <pin peripheral="CAN1" signal="can1_tx" pin_num="160" pin_signal="PTA11"/>
                   <pin peripheral="CAN1" signal="can1_rx" pin_num="159" pin_signal="PTA12"/>
+                  <pin peripheral="SIUL2" signal="gpio, 29" pin_num="32" pin_signal="PTA29">
+                     <pin_features>
+                        <pin_feature name="direction" value="OUTPUT"/>
+                     </pin_features>
+                  </pin>
+                  <pin peripheral="SIUL2" signal="gpio, 30" pin_num="33" pin_signal="PTA30">
+                     <pin_features>
+                        <pin_feature name="direction" value="OUTPUT"/>
+                     </pin_features>
+                  </pin>
+                  <pin peripheral="SIUL2" signal="gpio, 31" pin_num="39" pin_signal="PTA31">
+                     <pin_features>
+                        <pin_feature name="direction" value="OUTPUT"/>
+                     </pin_features>
+                  </pin>
+                  <pin peripheral="SIUL2" signal="gpio, 51" pin_num="43" pin_signal="PTB19">
+                     <pin_features>
+                        <pin_feature name="direction" value="INPUT"/>
+                     </pin_features>
+                  </pin>
+                  <pin peripheral="SIUL2" signal="gpio, 58" pin_num="73" pin_signal="PTB26">
+                     <pin_features>
+                        <pin_feature name="direction" value="INPUT"/>
+                     </pin_features>
+                  </pin>
                </pins>
             </function>
          </functions_list>

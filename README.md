@@ -14,11 +14,17 @@ La selección del nodo, el transceiver, los filtros y los modos de prueba está 
 
 Estado de los defines en este workspace al escribir este documento:
 
-- `NODE_ID = 1` (`MASTER`).
+- `NODE_ID = 2` (`DASHBOARD`).
 - `CAN_HW_INTERNAL` activo.
 - `CAN_DEBUG_MODE` activo: aceptación abierta para depuración.
 - `CAN_USE_RUNTIME_BITTIMING_PATCH = 1`: se mantiene el ajuste manual como respaldo.
-- `ARBITRATION_TEST` e `INVALID_ID_TEST` desactivados.
+- `ARBITRATION_TEST` desactivado; `INVALID_ID_TEST` activo para habilitar SW2.
+
+En operación normal no hay transmisión periódica: cada pulsación estable de
+SW3 (PTB26) genera una trama con `NODE_TX_ID`; cada pulsación de SW2 (PTB19)
+genera una trama de prueba con ID `0x555`. `ARBITRATION_TEST` conserva el envío
+periódico de 10 ms para la prueba específica de arbitraje. Los LEDs indican la
+recepción por 5 segundos: Nodo 1 verde, Nodo 2 azul, Nodo 3 rojo y Nodo 4 blanco.
 
 ## 2. Arquitectura de hardware
 
@@ -29,7 +35,11 @@ Estado de los defines en este workspace al escribir este documento:
 
 Conectar CANH con CANH y CANL con CANL, mantener una referencia GND común y colocar terminación únicamente en los dos extremos físicos del bus. Revisar si las placas ya incorporan terminación antes de añadir resistores.
 
-El pinmux generado configura ambos pares: CAN0/PTA6-PTA7 y CAN1/PTA11-PTA12. [`src/can_hw.c`](src/can_hw.c) inicializa un único array de pines; el build activa únicamente la instancia indicada por `CAN_HW_INTERNAL` o `CAN_HW_EXTERNAL`.
+El pinmux generado configura ambos pares: CAN0/PTA6-PTA7 y CAN1/PTA11-PTA12.
+También configura SW3/PTB26 y SW2/PTB19 como entradas activas en alto, y los
+canales RGB PTA29 (rojo), PTA30 (verde) y PTA31 (azul) como salidas activas en
+bajo. [`src/can_hw.c`](src/can_hw.c) inicializa el array de pines; el build activa
+únicamente la instancia indicada por `CAN_HW_INTERNAL` o `CAN_HW_EXTERNAL`.
 
 El `.mex` actual también tiene una configuración FlexCAN generada para FLEXCAN0. El driver de aplicación pasa el índice seleccionado en runtime y reutiliza `FlexCAN_Config0`; revisar la configuración generada si se modifica la topología de instancias.
 
@@ -41,9 +51,14 @@ Editar [`src/can_app_config.h`](src/can_app_config.h) al preparar cada placa:
 - `CAN_HW_INTERNAL` / `CAN_HW_EXTERNAL`: activar exactamente uno. Son defines de presencia; para desactivar uno, comentarlo, no asignarle `0`.
 - `CAN_DEBUG_MODE`: si está definido, `CAN_RX_FILTER_MASK` es `0x000`; comentarlo para el filtrado estricto de evaluación.
 - `ARBITRATION_TEST`: si está definido, transmite periódicamente cada 10 ms.
-- `INVALID_ID_TEST`: si está definido, transmite usando `TEST_INVALID_ID` (`0x555`).
+- `INVALID_ID_TEST`: si está definido, habilita SW2/PTB19 para transmitir una trama con `TEST_INVALID_ID` (`0x555`). SW3 sigue transmitiendo `NODE_TX_ID`.
 - `NODE_TX_ID`, `NODE_RX_ID_1`, `NODE_RX_ID_2`: se seleccionan automáticamente según `NODE_ID`; no hace falta duplicar los IDs en `can_hw.c`.
-- `CAN_RX_FILTER_MASK`: se calcula como `0x000` en debug o `0x7FF` en evaluación. El código la desplaza a la posición del campo ID estándar y configura máscaras individuales en MB1 y MB2.
+- `CAN_BUTTON_INPUT_REGISTER`/`CAN_BUTTON_INPUT_MASK`: SW3/PTB26 (GPDI58).
+- `CAN_INVALID_ID_BUTTON_REGISTER`/`CAN_INVALID_ID_BUTTON_MASK`: SW2/PTB19 (GPDI51).
+- `CAN_BUTTON_ACTIVE_LEVEL`: ambos pulsadores son activos en alto.
+- `CAN_BUTTON_DEBOUNCE_MS`: tiempo de estabilidad para aceptar una pulsación; actualmente 50 ms.
+- `CAN_RX_LED_ON_TIME_MS`: tiempo de indicación por recepción; actualmente 5000 ms.
+- `CAN_RX_FILTER_MASK`: máscara lógica de comparación: `0x000` en debug (no comparar el ID) o `0x7FF` en evaluación (comparar los 11 bits). `can_hw.c` invierte esos bits al escribir RXIMR porque el hardware usa `1` para indicar "don't care".
 - `CAN_USE_RUNTIME_BITTIMING_PATCH`: define numérico; `1` mantiene la sobreescritura manual de timing y `0` usa los valores de `FlexCAN_Config0` generados por RTD. El valor actual es `1`.
 
 `ARBITRATION_TEST` e `INVALID_ID_TEST` no pueden habilitarse juntos: el encabezado produce un error de compilación si ambos están definidos.
@@ -64,13 +79,13 @@ Compilar una variante por placa con el `NODE_ID` correspondiente. Los IDs mostra
 ### Código de aplicación
 
 - [`src/main.c`](src/main.c): llama a `CanHw_Init()`, después a `CanApp_Init()` y ejecuta `CanApp_MainFunction()` en el bucle principal.
-- [`src/can_app.c`](src/can_app.c): temporización periódica, construcción del payload, contadores y procesamiento de las recepciones. El payload actual contiene NODE_ID, contador de secuencia, el TX ID configurado, el último ID recibido y los bytes `0xA5, 0x5A`.
+- [`src/can_app.c`](src/can_app.c): antirrebote de ambos pulsadores, envío por evento en modo normal, temporización de arbitraje, construcción del payload, procesamiento RX y temporizador de LEDs. El payload contiene NODE_ID, estado presionado, contador, el TX ID configurado, el último ID recibido y `0xA5, 0x5A`.
 - [`src/can_app.h`](src/can_app.h): interfaz de aplicación y variables de diagnóstico exportadas.
 - [`src/can_hw.c`](src/can_hw.c): inicializa reloj y pines, configura FlexCAN, MBs, máscaras, callbacks, TX/RX y contadores de error.
 - [`src/can_hw.h`](src/can_hw.h): interfaz de hardware, estados y canales RX lógicos.
 - [`src/can_app_config.h`](src/can_app_config.h): selección central de nodo, hardware y pruebas.
 
-No hay salida UART de diagnóstico en esta aplicación. Durante el laboratorio, observar con el debugger `CanApp_RxCount`, `CanApp_TxCount`, `CanApp_LastRxId`, `CanApp_LastRxData`, `CanApp_LastHwStatus`, `CanHw_LastFlexcanStatus`, `CanHw_LastErrorStatus`, `CanHw_TxErrorCounter` y `CanHw_RxErrorCounter`.
+No hay salida UART de diagnóstico en esta aplicación. Durante el laboratorio, observar con el debugger `CanApp_ButtonPressCount`, `CanApp_InvalidIdPressCount`, `CanApp_RxCount`, `CanApp_TxCount`, `CanApp_LastRxId`, `CanApp_LastRxData`, `CanApp_LastHwStatus`, `CanHw_LastFlexcanStatus`, `CanHw_LastErrorStatus`, `CanHw_TxErrorCounter` y `CanHw_RxErrorCounter`.
 
 ### Configuración generada y RTD
 
@@ -78,7 +93,7 @@ No hay salida UART de diagnóstico en esta aplicación. Durante el laboratorio, 
 - [`generate/src/FlexCAN_Ip_Sa_PBcfg.c`](generate/src/FlexCAN_Ip_Sa_PBcfg.c): define `FlexCAN_Config0` y `FlexCAN_State0`, incluyendo timing generado.
 - [`generate/include/FlexCAN_Ip_Cfg.h`](generate/include/FlexCAN_Ip_Cfg.h): capacidades y opciones del driver; que RTD tenga soporte para FD no significa que la aplicación esté usando CAN FD.
 - [`generate/src/Clock_Ip_Cfg.c`](generate/src/Clock_Ip_Cfg.c): selección y división de clocks.
-- [`board/Siul2_Port_Ip_Cfg.c`](board/Siul2_Port_Ip_Cfg.c): array de pinmux que consume `CanHw_Init()`.
+- [`board/Siul2_Port_Ip_Cfg.c`](board/Siul2_Port_Ip_Cfg.c): array de pinmux que consume `CanHw_Init()`, incluyendo ambos pulsadores y los tres pines RGB.
 - [`RTD/src/FlexCAN_Ip.c`](RTD/src/FlexCAN_Ip.c) y [`RTD/include/FlexCAN_Ip_HwAccess.h`](RTD/include/FlexCAN_Ip_HwAccess.h): inicialización RTD y escritura de los campos de timing.
 - `Project_Settings/Startup_Code/`: arranque y tabla de excepciones. El servicio actual llama al dispatcher de FlexCAN desde el bucle principal porque el vector externo del proyecto dirige interrupciones a `undefined_handler`; no habilitar además otro despacho sin revisar ambos caminos.
 
@@ -92,7 +107,7 @@ La asignación está en `src/can_hw.c`:
 | 1 | RX_ID_1 | Recibe el ID configurado como `NODE_RX_ID_1`; máscara individual. |
 | 2 | RX_ID_2 | Recibe el ID configurado como `NODE_RX_ID_2`; máscara individual. |
 
-`CanApp_Init()` arma MB1 y MB2. Después de procesar una recepción, la aplicación vuelve a armar ese mismo MB.
+En debug se arma MB1 como buzón monitor de todos los IDs estándar y MB2 queda sin armar para evitar dos buzones wildcard compitiendo por las mismas tramas. En evaluación se arman MB1 y MB2 para los dos IDs suscritos. Después de procesar una recepción, la aplicación vuelve a armar ese mismo MB.
 
 ## 7. Bit timing y bitrate
 
@@ -126,12 +141,12 @@ La aplicación fuerza `fd_enable = FALSE`, `bitRateSwitch = FALSE` y `FLEXCAN_NO
 
 ## 8. Filtros
 
-La aplicación configura filtros individuales en hardware para MB1 y MB2:
+La aplicación programa máscaras de hardware individuales. `CAN_RX_FILTER_MASK` expresa qué bits comparar; RXIMR tiene la polaridad inversa:
 
-- **Modo debug (`CAN_DEBUG_MODE` definido):** `CAN_RX_FILTER_MASK = 0x000`. No se comparan los bits del ID; se usa para comprobar cableado, ACK y recepción física.
-- **Modo evaluación (`CAN_DEBUG_MODE` comentado):** `CAN_RX_FILTER_MASK = 0x7FF`. Se comparan los 11 bits del ID y el código añade comparaciones de IDE/RTR para aceptar tramas estándar de datos con el ID exacto configurado.
+- **Modo debug (`CAN_DEBUG_MODE` definido):** `CAN_RX_FILTER_MASK = 0x000`; RXIMR recibe `0x1FFC0000` en los bits de ID para aceptar todos los IDs estándar. Solo MB1 se arma como monitor.
+- **Modo evaluación (`CAN_DEBUG_MODE` comentado):** `CAN_RX_FILTER_MASK = 0x7FF`; RXIMR recibe cero en los bits de ID, por lo que compara el ID exacto configurado en cada MB. Se arman MB1 y MB2.
 
-Para la entrega, usar el modo estricto: comentar `CAN_DEBUG_MODE`, seleccionar el `NODE_ID` correcto y dejar desactivadas las pruebas temporales. Esto produce la máscara de aceptación exigida, `0x7FF`.
+Para la entrega, usar el modo estricto: comentar `CAN_DEBUG_MODE`, seleccionar el `NODE_ID` correcto y dejar desactivadas las pruebas temporales. La máscara lógica es `0x7FF`; la representación correspondiente en RXIMR es cero en los bits de ID.
 
 La máscara de aceptación no controla el ACK del protocolo. Un nodo puede reconocer eléctricamente una trama y emitir ACK aunque el filtro de aceptación no la entregue a MB1/MB2.
 
@@ -143,24 +158,23 @@ La máscara de aceptación no controla el ACK del protocolo. Un nodo puede recon
 2. Seleccionar el hardware y el `NODE_ID` adecuados en cada placa.
 3. Conectar al menos dos nodos al bus real, con CANH/CANL correctos, GND común y terminación apropiada en los extremos.
 4. Confirmar con analizador que hay tramas clásicas estándar a 500 kbit/s y que otro nodo activo genera ACK.
-5. Revisar `CanApp_TxCount` y `CanApp_RxCount` en el debugger. La aplicación transmite por defecto cada 1000 ms.
-
-Antes de probar `CAN_HW_INTERNAL`, resolver la limitación actual del pinmux descrita en la sección 2.
+5. Presionar SW3/PTB26 en un nodo. Debe generar una sola solicitud de envío por pulsación estable, no un envío periódico. Revisar `CanApp_ButtonPressCount` y `CanApp_TxCount`.
+6. En debug, los nodos aceptan cualquier trama de datos estándar y encienden su indicador asignado por 5 segundos. El analizador puede mostrar retransmisiones si el controlador no recibe ACK; eso no implica que la aplicación haya vuelto a solicitar la trama.
 
 ### ETAPA 2 — Prueba de filtros
 
 1. Comentar `CAN_DEBUG_MODE` y compilar las placas con sus `NODE_ID` correctos.
 2. Mantener desactivados los dos defines de prueba.
-3. Confirmar que cada nodo recibe solo sus dos IDs suscritos en MB1/MB2. Los demás IDs no deben actualizar `CanApp_RxCount`.
+3. Confirmar que cada nodo recibe solo sus dos IDs suscritos en MB1/MB2 y enciende su color por 5 segundos. Los demás IDs no deben actualizar `CanApp_RxCount` ni encender el LED.
 4. Si el bus tiene ACK pero la aplicación no recibe, revisar los IDs y la máscara antes de modificar el bit timing.
 
 ### ETAPA 3 — Prueba de ID inválido
 
-1. Mantener el modo estricto: `CAN_DEBUG_MODE` debe estar comentado.
-2. Habilitar `INVALID_ID_TEST` solo en el nodo transmisor de prueba; mantener los receptores con `INVALID_ID_TEST` desactivado.
-3. Dejar `ARBITRATION_TEST` desactivado, compilar y observar el ID transmitido `0x555`.
-4. El transmisor puede recibir ACK e incrementar `CanApp_TxCount`, pero los receptores no deben incrementar `CanApp_RxCount` por esa trama.
-5. Desactivar el define al terminar.
+1. Mantener el modo estricto: `CAN_DEBUG_MODE` debe estar comentado y `INVALID_ID_TEST` definido en el transmisor de prueba.
+2. Dejar `ARBITRATION_TEST` desactivado y presionar SW2/PTB19. El analizador debe decodificar el ID estándar `0x555`; es un ID válido de 11 bits pero no está suscrito por ningún nodo.
+3. Los receptores estrictos no deben incrementar `CanApp_RxCount` ni encender el LED por esa trama. Que aparezca ACK dominante es normal: el ACK confirma recepción a nivel CAN y no implica aceptación por el filtro de aplicación.
+4. SW3/PTB26 debe seguir transmitiendo el ID normal del nodo.
+5. Desactivar `INVALID_ID_TEST` cuando ya no se requiera SW2 como transmisor de prueba.
 
 ### ETAPA 4 — Prueba de arbitraje
 
@@ -181,6 +195,8 @@ Antes de probar `CAN_HW_INTERNAL`, resolver la limitación actual del pinmux des
 
 | Síntoma | Revisar |
 |---|---|
+| Pulsar un switch no genera trama | Revisar los contadores `CanApp_ButtonPressCount` / `CanApp_InvalidIdPressCount`; comprobar PTB26/GPDI58 para SW3 o PTB19/GPDI51 para SW2, el pinmux y `INVALID_ID_TEST`. `CanApp_TxCount` aumenta al completar TX; revisar MB0 y ACK de otro nodo activo. |
+| ID `0x555` tiene ACK pero no enciende LED en modo estricto | Es el resultado esperado: los nodos pueden ACKear la trama CAN aunque el filtro hardware no la entregue a la aplicación. |
 | No aparece ACK | Verificar que haya otro nodo alimentado y conectado al mismo bus; modo normal; bitrate y clock iguales; CANH/CANL, GND, alimentación y estado del transceiver. Revisar `CanHw_TxErrorCounter`, `CanHw_LastErrorStatus` y `CanHw_LastFlexcanStatus`. Un filtro estricto no debería impedir el ACK de una trama válida. |
 | Bus-Off | Revisar ausencia de ACK, bitrate incorrecto, cortos, polaridad CANH/CANL y terminación. Observar `CanHw_LastErrorStatus`, contadores TX/RX y `CanApp_LastHwStatus`. La recuperación automática habilitada en la configuración RTD no corrige la causa física. |
 | RX no recibe | Verificar que MB1/MB2 estén armados y rearmados, que `CanHw_Service()` siga ejecutándose y que el ID del emisor coincida con `NODE_RX_ID_1/2`. Comprobar también el pinmux del hardware seleccionado: CAN0/PTA6-PTA7 para interno o CAN1/PTA11-PTA12 para externo. |
@@ -207,12 +223,14 @@ Antes de probar `CAN_HW_INTERNAL`, resolver la limitación actual del pinmux des
 
 ## Checklist antes de flashear
 
-- **Archivos modificados para Nodo 1:** `src/can_app_config.h`, `CAN.mex`, `board/Siul2_Port_Ip_Cfg.c`, `board/Siul2_Port_Ip_Cfg.h` y este `README.md`.
-- **Defines:** `NODE_ID = 1`; `CAN_HW_INTERNAL` definido; `CAN_HW_EXTERNAL` comentado; `CAN_DEBUG_MODE` definido; `ARBITRATION_TEST` e `INVALID_ID_TEST` comentados; `CAN_USE_RUNTIME_BITTIMING_PATCH = 1U` (valor conservado).
-- **IDs resultantes:** `NODE_TX_ID = 0x100`, `NODE_RX_ID_1 = 0x200`, `NODE_RX_ID_2 = 0x300`.
+- **Archivos modificados para Nodo 2:** `src/can_app_config.h`, `CAN.mex`, `board/Siul2_Port_Ip_Cfg.c`, `board/Siul2_Port_Ip_Cfg.h`, `src/can_hw.c`, `src/can_hw.h`, `src/can_app.c`, `src/can_app.h` y este `README.md`.
+- **Defines:** `NODE_ID = 2`; `CAN_HW_INTERNAL` y `CAN_DEBUG_MODE` definidos; `CAN_HW_EXTERNAL` y `ARBITRATION_TEST` comentados; `INVALID_ID_TEST` definido; `CAN_USE_RUNTIME_BITTIMING_PATCH = 1U`.
+- **IDs resultantes:** `NODE_TX_ID = 0x200`, `NODE_RX_ID_1 = 0x100`, `NODE_RX_ID_2 = 0x400`; SW2 transmite `TEST_INVALID_ID = 0x555`.
 - **Instancia:** FLEXCAN0 (`CAN_FLEXCAN_INSTANCE = 0U`).
 - **Pines:** CAN0_RX = PTA6 y CAN0_TX = PTA7; transceiver integrado de MINI-EVB y terminales CANH/CANL.
 - **Message Buffers:** MB0 TX, MB1 RX_ID_1, MB2 RX_ID_2.
+- **Pulsadores:** SW3/PTB26 transmite el ID normal; SW2/PTB19 transmite `0x555` con `INVALID_ID_TEST`. Ambos activos en alto con debounce de 50 ms.
+- **Indicador de recepción:** Nodo 2 azul, activo en bajo, encendido 5 segundos tras cada trama aceptada.
 - **Bitrate esperado:** 500 kbit/s nominales con clock FlexCAN de 24 MHz. El parche runtime permanece habilitado.
-- **Periodo de transmisión esperado:** 1000 ms, porque `ARBITRATION_TEST` está desactivado.
+- **Frecuencia de transmisión esperada:** una solicitud por pulsación; `ARBITRATION_TEST` activa el modo periódico de 10 ms.
 - **Filtros:** máscara abierta `0x000` para esta prueba física, porque `CAN_DEBUG_MODE` está activo.

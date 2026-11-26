@@ -24,6 +24,9 @@ CanHw_StatusType CanHw_Init(void);
 Flexcan_Ip_StatusType CanHw_ArmReceive(uint8 channel);
 boolean CanHw_TakeReceived(uint8 channel, Flexcan_Ip_MsgBuffType * message);
 Flexcan_Ip_StatusType CanHw_Transmit(uint32 messageId, const uint8 * data);
+boolean CanHw_IsButtonPressed(void);
+boolean CanHw_IsInvalidIdButtonPressed(void);
+void CanHw_SetRxIndicator(boolean enabled);
 void CanHw_Service(void);
 
 #endif

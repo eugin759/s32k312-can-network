@@ -112,9 +112,10 @@ src/can_hw.o: ../src/can_hw.c ../src/can_app_config.h ../src/can_app.h \
  ../RTD/include/FlexCAN_Ip_HwAccess.h ../RTD/include/FlexCAN_Ip.h \
  C\:/nxp/S32DS.3.6.5/S32DS/software/PlatformSDK_S32K3/RTD/BaseNXP_TS_T40D34M70I0R0/include/Devassert.h \
  C\:/nxp/S32DS.3.6.5/S32DS/software/PlatformSDK_S32K3/RTD/BaseNXP_TS_T40D34M70I0R0/include/Mcal.h \
- ../RTD/include/FlexCAN_Ip_Irq.h ../RTD/include/Siul2_Port_Ip.h \
- C\:/Users/eugen/workspaceS32DS.3.6.5/CAN/board/Siul2_Port_Ip_Cfg.h \
+ ../RTD/include/FlexCAN_Ip_Irq.h \
  C\:/nxp/S32DS.3.6.5/S32DS/software/PlatformSDK_S32K3/RTD/BaseNXP_TS_T40D34M70I0R0/header/S32K312_SIUL2.h \
+ ../RTD/include/Siul2_Port_Ip.h \
+ C\:/Users/eugen/workspaceS32DS.3.6.5/CAN/board/Siul2_Port_Ip_Cfg.h \
  ../RTD/include/Siul2_Port_Ip_Types.h \
  C\:/Users/eugen/workspaceS32DS.3.6.5/CAN/generate/include/Siul2_Port_Ip_Defines.h \
  C\:/nxp/S32DS.3.6.5/S32DS/software/PlatformSDK_S32K3/RTD/BaseNXP_TS_T40D34M70I0R0/header/S32K312_DCM_GPR.h \
@@ -241,9 +242,9 @@ C\:/nxp/S32DS.3.6.5/S32DS/software/PlatformSDK_S32K3/RTD/BaseNXP_TS_T40D34M70I0R
 C\:/nxp/S32DS.3.6.5/S32DS/software/PlatformSDK_S32K3/RTD/BaseNXP_TS_T40D34M70I0R0/include/Devassert.h:
 C\:/nxp/S32DS.3.6.5/S32DS/software/PlatformSDK_S32K3/RTD/BaseNXP_TS_T40D34M70I0R0/include/Mcal.h:
 ../RTD/include/FlexCAN_Ip_Irq.h:
+C\:/nxp/S32DS.3.6.5/S32DS/software/PlatformSDK_S32K3/RTD/BaseNXP_TS_T40D34M70I0R0/header/S32K312_SIUL2.h:
 ../RTD/include/Siul2_Port_Ip.h:
 C\:/Users/eugen/workspaceS32DS.3.6.5/CAN/board/Siul2_Port_Ip_Cfg.h:
-C\:/nxp/S32DS.3.6.5/S32DS/software/PlatformSDK_S32K3/RTD/BaseNXP_TS_T40D34M70I0R0/header/S32K312_SIUL2.h:
 ../RTD/include/Siul2_Port_Ip_Types.h:
 C\:/Users/eugen/workspaceS32DS.3.6.5/CAN/generate/include/Siul2_Port_Ip_Defines.h:
 C\:/nxp/S32DS.3.6.5/S32DS/software/PlatformSDK_S32K3/RTD/BaseNXP_TS_T40D34M70I0R0/header/S32K312_DCM_GPR.h:

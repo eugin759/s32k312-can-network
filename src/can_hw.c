@@ -7,6 +7,7 @@
 #include "FlexCAN_Ip_Cfg.h"
 #include "FlexCAN_Ip_HwAccess.h"
 #include "FlexCAN_Ip_Irq.h"
+#include "S32K312_SIUL2.h"
 #include "Siul2_Port_Ip.h"
 #include "Siul2_Port_Ip_Cfg.h"
 
@@ -68,13 +69,11 @@ static void CanHw_FlexcanErrorCallback(uint8 instance,
 
 static uint32 CanHw_GetRxHardwareMask(void)
 {
-    uint32 mask = (uint32)(CAN_RX_FILTER_MASK << FLEXCAN_IP_ID_STD_SHIFT);
-
-    if (CAN_RX_FILTER_MASK != 0U)
-    {
-        mask |= FLEXCAN_IP_CS_IDE_MASK | FLEXCAN_IP_CS_RTR_MASK;
-    }
-    return mask;
+    /*
+     * CAN_RX_FILTER_MASK is a logical compare mask (1 = compare).
+     * FlexCAN RXIMR uses the opposite polarity (1 = don't care).
+     */
+    return ((~(uint32)CAN_RX_FILTER_MASK & 0x7FFU) << FLEXCAN_IP_ID_STD_SHIFT);
 }
 
 CanHw_StatusType CanHw_Init(void)
@@ -247,6 +246,35 @@ Flexcan_Ip_StatusType CanHw_Transmit(uint32 messageId, const uint8 * data)
     CanHw_LastFlexcanStatus = FlexCAN_Ip_Send(
         CAN_FLEXCAN_INSTANCE, CAN_HW_TX_MB, &txInfo, messageId, data);
     return CanHw_LastFlexcanStatus;
+}
+
+boolean CanHw_IsButtonPressed(void)
+{
+    return (((IP_SIUL2->CAN_BUTTON_INPUT_REGISTER & CAN_BUTTON_INPUT_MASK) ==
+             CAN_BUTTON_ACTIVE_LEVEL) ? TRUE : FALSE);
+}
+
+boolean CanHw_IsInvalidIdButtonPressed(void)
+{
+    return (((IP_SIUL2->CAN_INVALID_ID_BUTTON_REGISTER & CAN_INVALID_ID_BUTTON_MASK) ==
+             CAN_BUTTON_ACTIVE_LEVEL) ? TRUE : FALSE);
+}
+
+void CanHw_SetRxIndicator(boolean enabled)
+{
+    uint8 outputLevel = enabled ? CAN_LED_ON_LEVEL : CAN_LED_OFF_LEVEL;
+
+#if (NODE_ID == 1)
+    IP_SIUL2->CAN_LED_GREEN_OUTPUT_REGISTER = outputLevel;
+#elif (NODE_ID == 2)
+    IP_SIUL2->CAN_LED_BLUE_OUTPUT_REGISTER = outputLevel;
+#elif (NODE_ID == 3)
+    IP_SIUL2->CAN_LED_RED_OUTPUT_REGISTER = outputLevel;
+#else
+    IP_SIUL2->CAN_LED_RED_OUTPUT_REGISTER = outputLevel;
+    IP_SIUL2->CAN_LED_GREEN_OUTPUT_REGISTER = outputLevel;
+    IP_SIUL2->CAN_LED_BLUE_OUTPUT_REGISTER = outputLevel;
+#endif
 }
 
 void CanHw_Service(void)

@@ -6,6 +6,8 @@
 
 extern volatile uint32 CanApp_RxCount;
 extern volatile uint32 CanApp_TxCount;
+extern volatile uint32 CanApp_ButtonPressCount;
+extern volatile uint32 CanApp_InvalidIdPressCount;
 extern volatile uint32 CanApp_LastRxId;
 extern volatile uint8 CanApp_LastRxData[CAN_CLASSIC_DATA_LENGTH];
 extern volatile CanHw_StatusType CanApp_LastHwStatus;
