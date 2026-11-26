@@ -10,11 +10,11 @@
 /* =========================================================================
  * 1. PANEL DE CONTROL DEL NODO (Modificar unicamente esta seccion por placa)
  * ========================================================================= */
-#define NODE_ID             3       /**< Node role: 1, 2, 3, or 4 */
+#define NODE_ID             1       /**< Node role: 1, 2, 3, or 4 */
 
 /* Seleccion de hardware fisico (Descomentar SOLO UNO en S32K312) */
-#define CAN_HW_EXTERNAL             /**< External TJA1051 (5V USB-powered board) */
-// #define CAN_HW_INTERNAL          /**< Onboard TJA1043/1463 (12V healthy board) */
+// #define CAN_HW_EXTERNAL          /**< External TJA1051 (5V USB-powered board) */
+#define CAN_HW_INTERNAL             /**< Onboard CAN transceiver (MINI-EVB) */
 
 /* Modos de operacion y prueba */
 #define CAN_DEBUG_MODE              /**< Comment out for strict 0x7FF hardware filtering */

@@ -14,8 +14,8 @@ La selección del nodo, el transceiver, los filtros y los modos de prueba está 
 
 Estado de los defines en este workspace al escribir este documento:
 
-- `NODE_ID = 3` (`POWERTRAIN`).
-- `CAN_HW_EXTERNAL` activo.
+- `NODE_ID = 1` (`MASTER`).
+- `CAN_HW_INTERNAL` activo.
 - `CAN_DEBUG_MODE` activo: aceptación abierta para depuración.
 - `CAN_USE_RUNTIME_BITTIMING_PATCH = 1`: se mantiene el ajuste manual como respaldo.
 - `ARBITRATION_TEST` e `INVALID_ID_TEST` desactivados.
@@ -29,7 +29,7 @@ Estado de los defines en este workspace al escribir este documento:
 
 Conectar CANH con CANH y CANL con CANL, mantener una referencia GND común y colocar terminación únicamente en los dos extremos físicos del bus. Revisar si las placas ya incorporan terminación antes de añadir resistores.
 
-**Limitación del pinmux generado actual:** [`CAN.mex`](CAN.mex) y [`board/Siul2_Port_Ip_Cfg.c`](board/Siul2_Port_Ip_Cfg.c) contienen actualmente PTA11/PTA12 para CAN1, pero no PTA6/PTA7 para CAN0. [`src/can_hw.c`](src/can_hw.c) inicializa siempre el mismo array generado; cambiar `CAN_HW_EXTERNAL` por `CAN_HW_INTERNAL` cambia el índice FlexCAN, pero no conmuta por sí solo el pinmux. Antes de usar el transceiver integrado, agregar CAN0/PTA6-PTA7 en S32 Config Tools y regenerar el pinmux, o implementar y validar una selección entre tablas de pines.
+El pinmux generado configura ambos pares: CAN0/PTA6-PTA7 y CAN1/PTA11-PTA12. [`src/can_hw.c`](src/can_hw.c) inicializa un único array de pines; el build activa únicamente la instancia indicada por `CAN_HW_INTERNAL` o `CAN_HW_EXTERNAL`.
 
 El `.mex` actual también tiene una configuración FlexCAN generada para FLEXCAN0. El driver de aplicación pasa el índice seleccionado en runtime y reutiliza `FlexCAN_Config0`; revisar la configuración generada si se modifica la topología de instancias.
 
@@ -183,7 +183,7 @@ Antes de probar `CAN_HW_INTERNAL`, resolver la limitación actual del pinmux des
 |---|---|
 | No aparece ACK | Verificar que haya otro nodo alimentado y conectado al mismo bus; modo normal; bitrate y clock iguales; CANH/CANL, GND, alimentación y estado del transceiver. Revisar `CanHw_TxErrorCounter`, `CanHw_LastErrorStatus` y `CanHw_LastFlexcanStatus`. Un filtro estricto no debería impedir el ACK de una trama válida. |
 | Bus-Off | Revisar ausencia de ACK, bitrate incorrecto, cortos, polaridad CANH/CANL y terminación. Observar `CanHw_LastErrorStatus`, contadores TX/RX y `CanApp_LastHwStatus`. La recuperación automática habilitada en la configuración RTD no corrige la causa física. |
-| RX no recibe | Verificar que MB1/MB2 estén armados y rearmados, que `CanHw_Service()` siga ejecutándose y que el ID del emisor coincida con `NODE_RX_ID_1/2`. En modo interno, comprobar primero el pinmux CAN0/PTA6-PTA7: el pinmux generado actual solo contiene CAN1/PTA11-PTA12. |
+| RX no recibe | Verificar que MB1/MB2 estén armados y rearmados, que `CanHw_Service()` siga ejecutándose y que el ID del emisor coincida con `NODE_RX_ID_1/2`. Comprobar también el pinmux del hardware seleccionado: CAN0/PTA6-PTA7 para interno o CAN1/PTA11-PTA12 para externo. |
 | Filtros bloquean tráfico | Revisar `CAN_DEBUG_MODE`, `CAN_RX_FILTER_MASK`, `NODE_ID` y los IDs de suscripción. `0x7FF` es exacto para IDs estándar de 11 bits; `0x000` es modo de depuración. |
 | Bitrate incorrecto | Confirmar FIRC 48 MHz / divisor 2 = 24 MHz, los campos normales del `.mex` y el PBcfg, y el valor de `CAN_USE_RUNTIME_BITTIMING_PATCH`. Con el parche en `1`, revisar también las asignaciones en `can_hw.c`; con `0`, el timing efectivo proviene de `FlexCAN_Config0`. Medir en el bus: el cálculo de configuración no sustituye la validación con analizador. |
 
@@ -204,3 +204,15 @@ Antes de probar `CAN_HW_INTERNAL`, resolver la limitación actual del pinmux des
 - `src/can_hw.c` / `src/can_hw.h`: configuración FlexCAN, filtros, callbacks y asignación de MBs.
 - `CAN.mex`: clocks, periféricos y pinmux mediante S32 Config Tools; regenerar los archivos asociados después de editarlo.
 - `README.md`: mantener esta guía sincronizada con cualquier cambio validado de arquitectura o procedimiento de laboratorio.
+
+## Checklist antes de flashear
+
+- **Archivos modificados para Nodo 1:** `src/can_app_config.h`, `CAN.mex`, `board/Siul2_Port_Ip_Cfg.c`, `board/Siul2_Port_Ip_Cfg.h` y este `README.md`.
+- **Defines:** `NODE_ID = 1`; `CAN_HW_INTERNAL` definido; `CAN_HW_EXTERNAL` comentado; `CAN_DEBUG_MODE` definido; `ARBITRATION_TEST` e `INVALID_ID_TEST` comentados; `CAN_USE_RUNTIME_BITTIMING_PATCH = 1U` (valor conservado).
+- **IDs resultantes:** `NODE_TX_ID = 0x100`, `NODE_RX_ID_1 = 0x200`, `NODE_RX_ID_2 = 0x300`.
+- **Instancia:** FLEXCAN0 (`CAN_FLEXCAN_INSTANCE = 0U`).
+- **Pines:** CAN0_RX = PTA6 y CAN0_TX = PTA7; transceiver integrado de MINI-EVB y terminales CANH/CANL.
+- **Message Buffers:** MB0 TX, MB1 RX_ID_1, MB2 RX_ID_2.
+- **Bitrate esperado:** 500 kbit/s nominales con clock FlexCAN de 24 MHz. El parche runtime permanece habilitado.
+- **Periodo de transmisión esperado:** 1000 ms, porque `ARBITRATION_TEST` está desactivado.
+- **Filtros:** máscara abierta `0x000` para esta prueba física, porque `CAN_DEBUG_MODE` está activo.

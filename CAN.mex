@@ -47,6 +47,8 @@
                         <pin_feature name="direction" value="INPUT/OUTPUT"/>
                      </pin_features>
                   </pin>
+                  <pin peripheral="CAN0" signal="can0_rx" pin_num="102" pin_signal="PTA6"/>
+                  <pin peripheral="CAN0" signal="can0_tx" pin_num="100" pin_signal="PTA7"/>
                   <pin peripheral="CAN1" signal="can1_tx" pin_num="160" pin_signal="PTA11"/>
                   <pin peripheral="CAN1" signal="can1_rx" pin_num="159" pin_signal="PTA12"/>
                </pins>
