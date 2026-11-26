@@ -1,0 +1,17 @@
+# Build outputs
+Debug/
+Release/
+
+# Binaries
+*.elf
+*.bin
+*.hex
+*.srec
+*.map
+
+# Logs
+*.log
+
+# Windows
+Thumbs.db
+Desktop.ini
