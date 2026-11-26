@@ -72,7 +72,33 @@ boolean CanApp_Init(void)
     Flexcan_Ip_StatusType status;
     uint64 coreClockHz;
 
+#if (CLOCK_IP_GET_FREQUENCY_API == STD_ON)
     coreClockHz = Clock_Ip_GetClockFrequency(CORE_CLK);
+#else
+    {
+        const Clock_Ip_ConfiguredFrequencyType (*configuredFrequencies)[];
+        uint8 frequencyIndex;
+
+        /* The generated RTD config disables the live-frequency API; use its
+         * configured clock table instead of hard-coding CORE_CLK. */
+        coreClockHz = 0U;
+        configuredFrequencies = Clock_Ip_aClockConfig[0U].ConfiguredFrequencies;
+        if (configuredFrequencies != NULL_PTR)
+        {
+            for (frequencyIndex = 0U;
+                 frequencyIndex < Clock_Ip_aClockConfig[0U].ConfigureFrequenciesCount;
+                 frequencyIndex++)
+            {
+                if ((*configuredFrequencies)[frequencyIndex].Name == CORE_CLK)
+                {
+                    coreClockHz = (*configuredFrequencies)[frequencyIndex].ConfiguredFrequencyValue;
+                    break;
+                }
+            }
+        }
+    }
+#endif
+
     if ((coreClockHz == 0U) || (coreClockHz > 0xFFFFFFFFULL))
     {
         return FALSE;
